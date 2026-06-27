@@ -45,3 +45,39 @@ def test_clamp_volume():
     assert sonos._clamp_volume(150) == 100
     assert sonos._clamp_volume(-5) == 0
     assert sonos._clamp_volume(42) == 42
+
+
+def _now_coordinator(current_uri, metadata, track):
+    c = MagicMock()
+    c.group = None
+    c.avTransport.GetMediaInfo.return_value = {
+        "CurrentURI": current_uri,
+        "CurrentURIMetaData": metadata,
+    }
+    c.get_current_transport_info.return_value = {"current_transport_state": "PLAYING"}
+    c.get_current_track_info.return_value = track
+    return c
+
+
+def test_now_playing_includes_spotify_track_from_queue():
+    c = _now_coordinator(
+        "x-rincon-queue:RINCON_ABC#0",
+        "",
+        {"title": "Pillars", "artist": "Jack Garratt", "album": "The Tension Between"},
+    )
+    info = sonos.now_playing(c)
+    assert info["transport_state"] == "PLAYING"
+    assert info["source_uri"].startswith("x-rincon-queue")
+    assert info["track_artist"] == "Jack Garratt"
+    assert info["track_title"] == "Pillars"
+    assert info["track_album"] == "The Tension Between"
+
+
+def test_now_playing_parses_embedded_radio_title():
+    c = _now_coordinator(
+        "x-rincon-mp3radio://stream-mixtape-geo.ntslive.net/mixtape36",
+        "<DIDL-Lite><item><dc:title>Otaku</dc:title></item></DIDL-Lite>",
+        {"title": "", "artist": "", "album": ""},
+    )
+    info = sonos.now_playing(c)
+    assert info["source_title"] == "Otaku"

@@ -4,7 +4,7 @@ description: Streams NTS Radio (live stations + infinite mixtapes) and Spotify (
 license: MIT
 metadata:
   homepage: https://github.com/devontivona/houseparty
-  version: "0.2.3"
+  version: "0.2.4"
 compatibility: Requires Python 3.10+, the uv tool, and a Sonos system reachable on the local network.
 allowed-tools: Bash(houseparty:*) Bash(uv:*)
 ---

@@ -41,6 +41,29 @@ def _resolve_speaker_names(speaker: Optional[list[str]], cfg: Config) -> list[st
     return names
 
 
+def _now_label(info: dict, mixtapes) -> str:
+    """A human label for what a speaker is playing, across NTS and Spotify.
+
+    Order: identify an NTS stream by URI first (ground truth for radio), then the
+    Spotify track (artist/title/album from the queue), then the embedded radio
+    title, then the raw URI.
+    """
+    station = nts.identify(info.get("source_uri", ""), mixtapes)
+    if station:
+        return station
+
+    artist = (info.get("track_artist") or "").strip()
+    title = (info.get("track_title") or "").strip()
+    album = (info.get("track_album") or "").strip()
+    if title:
+        line = f"{artist} — {title}" if artist else title
+        if album and album != title:
+            line += f" · {album}"
+        return line
+
+    return info.get("source_title") or info.get("source_uri") or "—"
+
+
 @app.command("list")
 def list_content(
     refresh: bool = typer.Option(False, "--refresh", help="Force-refresh the mixtape catalog."),
@@ -151,15 +174,7 @@ def now(speaker: Optional[list[str]] = SpeakerOpt) -> None:
         for sp, name in zip(speakers, speaker):
             info = sonos.now_playing(sp)
             state = info.get("transport_state", "")
-            # Identify against the live catalog first (ground truth, survives NTS
-            # relabeling a slug), then fall back to the title Sonos has embedded.
-            label = (
-                nts.identify(info.get("source_uri", ""), mixtapes)
-                or info.get("source_title")
-                or info.get("source_uri")
-                or "—"
-            )
-            console.print(f"[bold]{name}[/] [{state}]: {label}")
+            console.print(f"[bold]{name}[/] [{state}]: {_now_label(info, mixtapes)}")
 
 
 @app.command()

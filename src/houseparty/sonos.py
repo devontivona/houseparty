@@ -200,20 +200,27 @@ _TITLE_RE = re.compile(r"<dc:title>(.*?)</dc:title>", re.DOTALL)
 def now_playing(speaker: SoCo) -> dict[str, str]:
     """Return what a speaker is playing.
 
-    Reads ``GetMediaInfo`` (not just the track info): it carries the original,
-    un-redirected ``CurrentURI`` we enqueued and the ``dc:title`` we embedded —
-    far more useful than the track-level info, whose title is blank for radio
-    and whose URI is the post-redirect edge URL.
+    Reads both ``GetMediaInfo`` and the track info, because they're useful for
+    different sources:
+
+    * **Radio (NTS):** ``GetMediaInfo`` carries the original, un-redirected
+      ``CurrentURI`` and the ``dc:title`` we embed; the track info is blank.
+    * **Spotify (queue):** ``CurrentURI`` is just the queue (``x-rincon-queue:``),
+      so the real track/artist/album come from ``get_current_track_info()``.
     """
     coordinator = speaker.group.coordinator if speaker.group else speaker
     media = coordinator.avTransport.GetMediaInfo([("InstanceID", 0)])
     state = coordinator.get_current_transport_info().get("current_transport_state", "")
+    track = coordinator.get_current_track_info() or {}
 
     embedded = _TITLE_RE.search(media.get("CurrentURIMetaData") or "")
     return {
         "transport_state": state,
         "source_uri": media.get("CurrentURI", ""),
         "source_title": html.unescape(embedded.group(1)) if embedded else "",
+        "track_title": track.get("title", ""),
+        "track_artist": track.get("artist", ""),
+        "track_album": track.get("album", ""),
     }
 
 

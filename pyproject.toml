@@ -1,6 +1,6 @@
 [project]
 name = "houseparty"
-version = "0.2.3"
+version = "0.2.4"
 description = "Stream NTS Radio and Spotify to Sonos speakers"
 readme = "README.md"
 authors = [
