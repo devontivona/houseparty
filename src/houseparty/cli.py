@@ -244,26 +244,46 @@ def _results_table(title: str, results: list[spotify.SearchResult]) -> Table:
 
 @spotify_app.command("auth")
 def spotify_auth(
-    no_browser: bool = typer.Option(
-        False, "--no-browser", help="Print the login URL to open manually (headless/SSH)."
+    response: Optional[str] = typer.Option(
+        None,
+        "--response",
+        help="The full URL you were redirected to (or the bare code) — completes login.",
     ),
     redirect_uri: Optional[str] = typer.Option(
         None,
         "--redirect-uri",
-        help="Override the configured callback URL for this login only "
-        "(must be registered in the Spotify app).",
+        help="Override the configured callback URL (must be registered in the Spotify app).",
     ),
 ) -> None:
-    """Authenticate with Spotify (one-time browser login)."""
+    """Authenticate with Spotify (two-step, non-interactive).
+
+    Step 1: run with no options to print the authorize URL. Open it, approve,
+    and your browser lands on the callback URL. Step 2: re-run with
+    `--response "<that URL>"` to complete login. Works on a headless box with the
+    browser on another machine — the callback URL doesn't have to load; only the
+    `code` in it matters.
+    """
     cfg = Config.load()
+    if response:
+        try:
+            me = spotify.complete_auth(response, cfg, redirect_uri=redirect_uri)
+        except spotify.SpotifyError as exc:
+            _fail(str(exc))
+        who = me.get("display_name") or me.get("id") or "unknown"
+        console.print(f"[green]✓[/] Authenticated with Spotify as [bold]{who}[/].")
+        return
+
     try:
-        me = spotify.authenticate(
-            cfg, open_browser=not no_browser, redirect_uri=redirect_uri
-        )
+        url = spotify.auth_url(cfg, redirect_uri=redirect_uri)
     except spotify.SpotifyError as exc:
         _fail(str(exc))
-    who = me.get("display_name") or me.get("id") or "unknown"
-    console.print(f"[green]✓[/] Authenticated with Spotify as [bold]{who}[/].")
+    console.print("1. Open this URL in a browser and approve:\n")
+    console.print(url)
+    console.print(
+        "\n2. You'll land on a callback URL (a 'can't connect' page is fine). "
+        "Copy that whole URL and run:\n"
+    )
+    console.print('   houseparty spotify auth --response "<paste the URL here>"')
 
 
 @spotify_app.command("search")

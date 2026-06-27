@@ -4,7 +4,7 @@ description: Streams NTS Radio (live stations + infinite mixtapes) and Spotify (
 license: MIT
 metadata:
   homepage: https://github.com/devontivona/houseparty
-  version: "0.2.2"
+  version: "0.2.3"
 compatibility: Requires Python 3.10+, the uv tool, and a Sonos system reachable on the local network.
 allowed-tools: Bash(houseparty:*) Bash(uv:*)
 ---
@@ -99,13 +99,16 @@ One-time setup (required before any Spotify command works):
    port.
 3. Store credentials: `houseparty spotify set-client <CLIENT_ID> <CLIENT_SECRET>
    [--redirect-uri URL]` (or set `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`).
-4. Authenticate once with `houseparty spotify auth`. On a **headless box you log
-   in to from another machine**, use `--no-browser`: it prints a URL to open on
-   that machine; after you approve, the browser lands on the
-   `http://127.0.0.1:PORT/callback?code=...` URL (a "can't connect" page is
-   expected — nothing is served there). Copy that whole URL and paste it back.
-   The redirect never has to load; only the `code` in the URL matters. Use
-   `--redirect-uri URL` to override the configured callback for one login.
+4. Authenticate (two-step, non-interactive):
+   - `houseparty spotify auth` prints an authorize URL. Open it in a browser and
+     approve.
+   - The browser lands on `http://127.0.0.1:PORT/callback?code=...` (a "can't
+     connect" page is expected on a headless box — nothing is served there).
+   - `houseparty spotify auth --response "<that whole URL>"` completes login.
+
+   This works when the browser is on a different machine than the headless box:
+   the callback never has to load; only the `code` in the URL matters. Use
+   `--redirect-uri URL` on either step to override the configured callback.
 
 Spotify commands:
 

@@ -58,19 +58,17 @@ Sonos.
    ```bash
    houseparty spotify set-client <CLIENT_ID> <CLIENT_SECRET> \
      --redirect-uri http://127.0.0.1:8080/callback   # match your registered URI
-   houseparty spotify auth --no-browser              # prints a URL to open + paste back
+
+   houseparty spotify auth                            # step 1: prints an authorize URL
+   # open the URL, approve, copy the callback URL you land on, then:
+   houseparty spotify auth --response "http://127.0.0.1:8080/callback?code=..."  # step 2
    ```
 
-   `set-client --redirect-uri` sets the default callback; `spotify auth
-   --redirect-uri URL` overrides it for one login.
-
-   **Headless box, browser on another machine?** Loopback still works with
-   `--no-browser`: open the printed URL on your machine, approve, then copy the
-   `http://127.0.0.1:PORT/callback?code=...` URL the browser lands on (a
-   "can't connect" page is expected — nothing is served there) and paste it back.
-   Only the `code` matters; the redirect never has to load. For hands-off
-   capture instead, SSH-forward the port (`ssh -L PORT:127.0.0.1:PORT box`) and
-   run `houseparty spotify auth` without `--no-browser`.
+   Authentication is two non-interactive steps, so it works on a **headless box
+   with the browser on another machine**: the `http://127.0.0.1:PORT/callback`
+   URL never has to load (a "can't connect" page is expected) — only the `code`
+   in it matters. `set-client --redirect-uri` sets the default callback;
+   `spotify auth --redirect-uri URL` overrides it for one login.
 
 **Usage:**
 

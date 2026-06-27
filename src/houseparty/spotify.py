@@ -116,6 +116,38 @@ def authenticate(
         raise SpotifyError(f"Spotify authentication failed: {exc}") from exc
 
 
+def auth_url(cfg: Config | None = None, redirect_uri: str | None = None) -> str:
+    """The Spotify authorize URL to open in a browser (step 1 of headless login)."""
+    cfg = cfg or Config.load()
+    return _auth_manager(cfg, open_browser=False, redirect_uri=redirect_uri).get_authorize_url()
+
+
+def complete_auth(
+    redirect_response: str, cfg: Config | None = None, redirect_uri: str | None = None
+) -> dict:
+    """Exchange the redirected URL (or bare code) for a token (step 2).
+
+    Non-interactive: takes the URL the browser landed on, pulls out the ``code``,
+    swaps it for an access/refresh token (cached to disk), and returns the user
+    profile. Lets a headless box complete login without a live stdin prompt.
+    """
+    cfg = cfg or Config.load()
+    am = _auth_manager(cfg, open_browser=False, redirect_uri=redirect_uri)
+    text = redirect_response.strip()
+    if not text:
+        raise SpotifyError(
+            "Paste the full URL you were redirected to (containing `?code=...`), "
+            "or just the code itself."
+        )
+    # For a full redirect URL this returns the code; for a bare code, the code.
+    code = am.parse_response_code(text)
+    try:
+        am.get_access_token(code, as_dict=False, check_cache=False)
+        return spotipy.Spotify(auth_manager=am).me()
+    except spotipy.SpotifyException as exc:  # pragma: no cover - network
+        raise SpotifyError(f"Spotify authentication failed: {exc}") from exc
+
+
 # --- parsing helpers -------------------------------------------------------
 
 def _names(artists: list | None) -> str:

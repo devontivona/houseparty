@@ -167,6 +167,24 @@ def test_play_spotify_enqueue_failure_raises_friendly_error(share_cls):
     assert "linked" in msg and "800" in msg  # friendly hint + raw error
 
 
+def test_complete_auth_rejects_empty_input():
+    with pytest.raises(spotify.SpotifyError):
+        spotify.complete_auth("   ")
+
+
+@patch.object(spotify, "_auth_manager")
+def test_complete_auth_exchanges_code(am_factory):
+    am = am_factory.return_value
+    am.parse_response_code.return_value = "AUTHCODE123"
+    with patch.object(spotify.spotipy, "Spotify") as spotify_cls:
+        spotify_cls.return_value.me.return_value = {"id": "devon"}
+        me = spotify.complete_auth("http://127.0.0.1:51777/callback?code=AUTHCODE123")
+    am.get_access_token.assert_called_once()
+    # the parsed code, not the raw URL, is exchanged
+    assert am.get_access_token.call_args.args[0] == "AUTHCODE123"
+    assert me["id"] == "devon"
+
+
 @patch.object(sonos.MusicService, "get_all_music_services_names")
 def test_spotify_linked(names_mock):
     names_mock.return_value = ["Spotify", "TuneIn"]
