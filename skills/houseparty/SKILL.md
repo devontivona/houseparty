@@ -4,7 +4,7 @@ description: Streams NTS Radio (live stations + always-on infinite mixtapes) and
 license: MIT
 metadata:
   homepage: https://github.com/devontivona/houseparty
-  version: "0.3.0"
+  version: "0.3.1"
 compatibility: Requires Python 3.10+, the uv tool, and a Sonos system reachable on the local network.
 allowed-tools: Bash(houseparty:*) Bash(uv:*)
 ---
@@ -145,11 +145,12 @@ Spotify commands:
 - `houseparty spotify search QUERY [--type artist,album,playlist,track] [--limit N] [--json]`
   — search the catalog. Returns each result's `kind`, `name`, `detail`, `uri`,
   and `url`.
-- `houseparty spotify play TARGET -s NAME [--type T] [--add|--next] [--volume N] [--json]`
+- `houseparty spotify play TARGET -s NAME [-s NAME ...] [--type T] [--add|--next] [--volume N] [--json]`
   — TARGET is a free-text query (plays the top match), a `spotify:` URI, or an
   open.spotify.com link. Tracks/albums/playlists play directly; an **artist**
   plays their top tracks. `--add` appends to the queue, `--next` plays after the
-  current track.
+  current track. Like NTS `play`, multiple `-s` flags form the **exact** group
+  for playback — any other speakers they were grouped with are dropped.
 - `houseparty spotify playlists [--json]` — the user's own playlists.
 - `houseparty spotify liked [--json]` — the user's liked/saved songs.
 - `houseparty spotify set-client ID SECRET [--market US] [--redirect-uri URL]` —
