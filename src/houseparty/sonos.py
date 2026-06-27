@@ -188,6 +188,31 @@ def stop(speakers: list[SoCo]) -> None:
         (sp.group.coordinator if sp.group else sp).stop()
 
 
+def _coordinators(speakers: list[SoCo]) -> list[SoCo]:
+    """De-duplicate speakers down to their group coordinators.
+
+    Skip/transport commands act on the whole group, so issuing one per member
+    would over-skip; collapse to one coordinator per group.
+    """
+    out: dict[str, SoCo] = {}
+    for sp in speakers:
+        c = sp.group.coordinator if sp.group else sp
+        out[c.uid] = c
+    return list(out.values())
+
+
+def skip_next(speakers: list[SoCo]) -> None:
+    """Skip to the next track on each speaker's group."""
+    for c in _coordinators(speakers):
+        c.next()
+
+
+def skip_previous(speakers: list[SoCo]) -> None:
+    """Go to the previous track on each speaker's group."""
+    for c in _coordinators(speakers):
+        c.previous()
+
+
 def set_volume(speakers: list[SoCo], level: int) -> None:
     level = _clamp_volume(level)
     for sp in speakers:

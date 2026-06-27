@@ -149,6 +149,36 @@ def stop(speaker: Optional[list[str]] = SpeakerOpt) -> None:
     console.print(f"[yellow]■[/] Stopped [bold]{', '.join(names)}[/].")
 
 
+@app.command("next")
+def next_track(speaker: Optional[list[str]] = SpeakerOpt) -> None:
+    """Skip to the next track (for queue playback, e.g. Spotify)."""
+    cfg = Config.load()
+    names = _resolve_speaker_names(speaker, cfg)
+    try:
+        speakers = sonos.resolve_speakers(names, cfg.speaker_ips)
+        sonos.skip_next(speakers)
+    except sonos.SonosError as exc:
+        _fail(str(exc))
+    except Exception:  # noqa: BLE001 - radio streams have no next track
+        _fail("Can't skip — there's no next track (live radio has no queue).")
+    console.print(f"[green]⏭[/] Skipped on [bold]{', '.join(names)}[/].")
+
+
+@app.command("previous")
+def previous_track(speaker: Optional[list[str]] = SpeakerOpt) -> None:
+    """Go to the previous track (for queue playback, e.g. Spotify)."""
+    cfg = Config.load()
+    names = _resolve_speaker_names(speaker, cfg)
+    try:
+        speakers = sonos.resolve_speakers(names, cfg.speaker_ips)
+        sonos.skip_previous(speakers)
+    except sonos.SonosError as exc:
+        _fail(str(exc))
+    except Exception:  # noqa: BLE001 - radio streams have no previous track
+        _fail("Can't go back — there's no previous track (live radio has no queue).")
+    console.print(f"[green]⏮[/] Previous on [bold]{', '.join(names)}[/].")
+
+
 @app.command()
 def volume(
     level: int = typer.Argument(..., help="Volume level 0-100."),

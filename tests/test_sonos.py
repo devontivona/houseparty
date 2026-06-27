@@ -73,6 +73,31 @@ def test_now_playing_includes_spotify_track_from_queue():
     assert info["track_album"] == "The Tension Between"
 
 
+def test_skip_next_issues_one_next_per_group():
+    coord = MagicMock()
+    coord.uid = "A"
+    m1, m2 = MagicMock(), MagicMock()
+    m1.group.coordinator = coord
+    m2.group.coordinator = coord  # same group as m1
+
+    sonos.skip_next([m1, m2])
+
+    coord.next.assert_called_once()  # de-duped to the shared coordinator
+
+
+def test_skip_previous_separate_groups():
+    c1, c2 = MagicMock(), MagicMock()
+    c1.uid, c2.uid = "A", "B"
+    s1, s2 = MagicMock(), MagicMock()
+    s1.group.coordinator = c1
+    s2.group.coordinator = c2
+
+    sonos.skip_previous([s1, s2])
+
+    c1.previous.assert_called_once()
+    c2.previous.assert_called_once()
+
+
 def test_now_playing_parses_embedded_radio_title():
     c = _now_coordinator(
         "x-rincon-mp3radio://stream-mixtape-geo.ntslive.net/mixtape36",

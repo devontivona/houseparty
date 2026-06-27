@@ -29,6 +29,7 @@ houseparty speakers --cache                  # discover speakers, cache their IP
 houseparty play 1 -s "Kitchen Speaker"       # NTS 1 in the kitchen
 houseparty play poolside -s "Living Room"    # an infinite mixtape
 houseparty play "slow focus" -s Office -s "Rec Room"   # grouped, fuzzy name
+houseparty next -s "Kitchen Speaker"         # skip track (Spotify queue playback)
 houseparty volume 25 -s "Kitchen Speaker"
 houseparty now                               # what's on air on NTS right now
 houseparty now -s "Kitchen Speaker"          # ...plus what the speaker is playing
