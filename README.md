@@ -49,21 +49,28 @@ Sonos.
 1. You need **Spotify Premium**, and Spotify must be **linked in your Sonos app**
    (Settings → Services). houseparty can't link it for you.
 2. Create an app at [developer.spotify.com](https://developer.spotify.com/dashboard)
-   → copy the client ID + secret, and add a loopback redirect URI like
-   `http://127.0.0.1:8080/callback`. The redirect host must be reachable from
-   wherever you open the browser — on a **headless box you log in to remotely**,
-   register the box's LAN name instead (e.g. `http://janeway.local:51777/callback`).
-   Spotify requires an exact match, so register the precise host **and** port.
+   → copy the client ID + secret, and add a **loopback** redirect URI like
+   `http://127.0.0.1:8080/callback`. Spotify only permits plain `http` for the
+   loopback literals `127.0.0.1` / `[::1]` (not `localhost`, not a LAN
+   hostname/IP). Register the exact host **and** port.
 3. Save credentials and log in:
 
    ```bash
    houseparty spotify set-client <CLIENT_ID> <CLIENT_SECRET> \
-     --redirect-uri http://janeway.local:51777/callback   # match your registered URI
-   houseparty spotify auth --no-browser   # headless: prints a URL to open + paste back
+     --redirect-uri http://127.0.0.1:8080/callback   # match your registered URI
+   houseparty spotify auth --no-browser              # prints a URL to open + paste back
    ```
 
    `set-client --redirect-uri` sets the default callback; `spotify auth
-   --redirect-uri URL` overrides it for a single login.
+   --redirect-uri URL` overrides it for one login.
+
+   **Headless box, browser on another machine?** Loopback still works with
+   `--no-browser`: open the printed URL on your machine, approve, then copy the
+   `http://127.0.0.1:PORT/callback?code=...` URL the browser lands on (a
+   "can't connect" page is expected — nothing is served there) and paste it back.
+   Only the `code` matters; the redirect never has to load. For hands-off
+   capture instead, SSH-forward the port (`ssh -L PORT:127.0.0.1:PORT box`) and
+   run `houseparty spotify auth` without `--no-browser`.
 
 **Usage:**
 

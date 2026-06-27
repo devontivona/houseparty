@@ -4,7 +4,7 @@ description: Streams NTS Radio (live stations + infinite mixtapes) and Spotify (
 license: MIT
 metadata:
   homepage: https://github.com/devontivona/houseparty
-  version: "0.2.1"
+  version: "0.2.2"
 compatibility: Requires Python 3.10+, the uv tool, and a Sonos system reachable on the local network.
 allowed-tools: Bash(houseparty:*) Bash(uv:*)
 ---
@@ -92,17 +92,20 @@ One-time setup (required before any Spotify command works):
 1. The user needs **Spotify Premium** and must have **linked Spotify in their
    Sonos app** (Settings > Services). houseparty cannot link it.
 2. Create a Spotify developer app at developer.spotify.com → get a client ID and
-   secret, and register a loopback redirect URI such as
-   `http://127.0.0.1:8080/callback`. The host in the redirect must be reachable
-   from wherever the browser runs: on a **headless box you log in to from another
-   machine**, register the box's LAN name instead, e.g.
-   `http://HOST.local:51777/callback`, and set it with `set-client --redirect-uri`
-   (Spotify requires an exact match, including port).
+   secret, and register a **loopback** redirect URI like
+   `http://127.0.0.1:8080/callback`. Spotify only allows plain `http` for the
+   loopback literals `127.0.0.1` / `[::1]` — not `localhost`, and not a LAN
+   hostname or IP (those would need `https`). Register the exact host **and**
+   port.
 3. Store credentials: `houseparty spotify set-client <CLIENT_ID> <CLIENT_SECRET>
    [--redirect-uri URL]` (or set `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`).
-4. Authenticate once: `houseparty spotify auth` (browser login; use
-   `--no-browser` on a headless/SSH host to get a paste-able URL, and
-   `--redirect-uri URL` to override the configured callback for that login only).
+4. Authenticate once with `houseparty spotify auth`. On a **headless box you log
+   in to from another machine**, use `--no-browser`: it prints a URL to open on
+   that machine; after you approve, the browser lands on the
+   `http://127.0.0.1:PORT/callback?code=...` URL (a "can't connect" page is
+   expected — nothing is served there). Copy that whole URL and paste it back.
+   The redirect never has to load; only the `code` in the URL matters. Use
+   `--redirect-uri URL` to override the configured callback for one login.
 
 Spotify commands:
 
