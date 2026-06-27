@@ -49,14 +49,21 @@ Sonos.
 1. You need **Spotify Premium**, and Spotify must be **linked in your Sonos app**
    (Settings → Services). houseparty can't link it for you.
 2. Create an app at [developer.spotify.com](https://developer.spotify.com/dashboard)
-   → copy the client ID + secret, and add the redirect URI
-   `http://127.0.0.1:8080/callback`.
+   → copy the client ID + secret, and add a loopback redirect URI like
+   `http://127.0.0.1:8080/callback`. The redirect host must be reachable from
+   wherever you open the browser — on a **headless box you log in to remotely**,
+   register the box's LAN name instead (e.g. `http://janeway.local:51777/callback`).
+   Spotify requires an exact match, so register the precise host **and** port.
 3. Save credentials and log in:
 
    ```bash
-   houseparty spotify set-client <CLIENT_ID> <CLIENT_SECRET>
-   houseparty spotify auth          # one-time browser login (--no-browser on SSH)
+   houseparty spotify set-client <CLIENT_ID> <CLIENT_SECRET> \
+     --redirect-uri http://janeway.local:51777/callback   # match your registered URI
+   houseparty spotify auth --no-browser   # headless: prints a URL to open + paste back
    ```
+
+   `set-client --redirect-uri` sets the default callback; `spotify auth
+   --redirect-uri URL` overrides it for a single login.
 
 **Usage:**
 

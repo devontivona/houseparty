@@ -69,7 +69,9 @@ class PlayTarget:
         return {"label": self.label, "kind": self.kind, "links": list(self.links)}
 
 
-def _auth_manager(cfg: Config, open_browser: bool = True) -> SpotifyOAuth:
+def _auth_manager(
+    cfg: Config, open_browser: bool = True, redirect_uri: str | None = None
+) -> SpotifyOAuth:
     sp_cfg = cfg.spotify
     client_id = sp_cfg.resolved_client_id()
     client_secret = sp_cfg.resolved_client_secret()
@@ -82,22 +84,32 @@ def _auth_manager(cfg: Config, open_browser: bool = True) -> SpotifyOAuth:
     return SpotifyOAuth(
         client_id=client_id,
         client_secret=client_secret,
-        redirect_uri=sp_cfg.redirect_uri,
+        redirect_uri=redirect_uri or sp_cfg.redirect_uri,
         scope=SCOPES,
         cache_path=str(spotify_token_path()),
         open_browser=open_browser,
     )
 
 
-def client(cfg: Config | None = None, open_browser: bool = True) -> spotipy.Spotify:
-    """Return an authenticated spotipy client (triggers login if needed)."""
+def client(
+    cfg: Config | None = None, open_browser: bool = True, redirect_uri: str | None = None
+) -> spotipy.Spotify:
+    """Return an authenticated spotipy client (triggers login if needed).
+
+    ``redirect_uri`` overrides the configured callback for this call (used by
+    ``spotify auth`` to log in from a different host than the default).
+    """
     cfg = cfg or Config.load()
-    return spotipy.Spotify(auth_manager=_auth_manager(cfg, open_browser=open_browser))
+    return spotipy.Spotify(
+        auth_manager=_auth_manager(cfg, open_browser=open_browser, redirect_uri=redirect_uri)
+    )
 
 
-def authenticate(cfg: Config | None = None, open_browser: bool = True) -> dict:
+def authenticate(
+    cfg: Config | None = None, open_browser: bool = True, redirect_uri: str | None = None
+) -> dict:
     """Force the OAuth flow to complete and return the logged-in user's profile."""
-    sp = client(cfg, open_browser=open_browser)
+    sp = client(cfg, open_browser=open_browser, redirect_uri=redirect_uri)
     try:
         return sp.me()
     except spotipy.SpotifyException as exc:  # pragma: no cover - network

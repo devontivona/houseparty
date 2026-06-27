@@ -247,11 +247,19 @@ def spotify_auth(
     no_browser: bool = typer.Option(
         False, "--no-browser", help="Print the login URL to open manually (headless/SSH)."
     ),
+    redirect_uri: Optional[str] = typer.Option(
+        None,
+        "--redirect-uri",
+        help="Override the configured callback URL for this login only "
+        "(must be registered in the Spotify app).",
+    ),
 ) -> None:
     """Authenticate with Spotify (one-time browser login)."""
     cfg = Config.load()
     try:
-        me = spotify.authenticate(cfg, open_browser=not no_browser)
+        me = spotify.authenticate(
+            cfg, open_browser=not no_browser, redirect_uri=redirect_uri
+        )
     except spotify.SpotifyError as exc:
         _fail(str(exc))
     who = me.get("display_name") or me.get("id") or "unknown"
