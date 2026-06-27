@@ -80,23 +80,49 @@ def resolve_speakers(names: list[str], speaker_ips: dict[str, str] | None = None
     return [_find_one(n, speaker_ips) for n in names]
 
 
+def _form_group(speakers: list[SoCo]) -> SoCo:
+    """Make ``speakers`` an exclusive playback group and return the coordinator.
+
+    Any speaker currently grouped with a target but NOT in the target list is
+    dropped (unjoined, which stops it), so `play ... -s X` means "play on exactly
+    X" rather than adding to whatever group X was already in.
+    """
+    coordinator = speakers[0]
+    target_uids = {s.uid for s in speakers}
+
+    # Drop speakers grouped with a target but not themselves a target.
+    extras: dict[str, SoCo] = {}
+    for s in speakers:
+        grp = getattr(s, "group", None)
+        if grp:
+            for m in grp.members:
+                if m.uid not in target_uids:
+                    extras[m.uid] = m
+    for m in extras.values():
+        m.unjoin()
+
+    # Detach the coordinator from any prior group, then attach the listed members.
+    coordinator.unjoin()
+    for member in speakers[1:]:
+        member.join(coordinator)
+    return coordinator
+
+
 def play(
     speakers: list[SoCo],
     title: str,
     url: str,
     volume: int | None = None,
 ) -> None:
-    """Play ``url`` on the given speakers, grouping them if more than one.
+    """Play ``url`` on exactly the given speakers (grouped if more than one).
 
-    Playback is sent to the first speaker (the group coordinator); any others
-    join its group and follow along.
+    The listed speakers become an exclusive group; any other speakers that were
+    grouped with them are dropped. Playback is sent to the coordinator.
     """
     if not speakers:
         raise SonosError("No speakers to play on.")
 
-    coordinator = speakers[0]
-    for member in speakers[1:]:
-        member.join(coordinator)
+    coordinator = _form_group(speakers)
 
     if volume is not None:
         for sp in speakers:
@@ -140,9 +166,7 @@ def play_spotify(
     if not links:
         raise SonosError("Nothing to play.")
 
-    coordinator = speakers[0]
-    for member in speakers[1:]:
-        member.join(coordinator)
+    coordinator = _form_group(speakers)
     if volume is not None:
         for sp in speakers:
             sp.volume = _clamp_volume(volume)

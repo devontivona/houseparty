@@ -4,7 +4,7 @@ description: Streams NTS Radio (live stations + always-on infinite mixtapes) and
 license: MIT
 metadata:
   homepage: https://github.com/devontivona/houseparty
-  version: "0.2.7"
+  version: "0.3.0"
 compatibility: Requires Python 3.10+, the uv tool, and a Sonos system reachable on the local network.
 allowed-tools: Bash(houseparty:*) Bash(uv:*)
 ---
@@ -92,8 +92,10 @@ Check it is available with `houseparty --help`.
 - `houseparty play TARGET -s NAME [-s NAME ...] [--volume N]` — play a station
   or mixtape. TARGET is `1` or `2` for the live stations, or a mixtape alias or
   title. Matching is case- and hyphen-insensitive with a fuzzy fallback, so
-  `"slow focus"` resolves to `slow-focus`. Passing multiple `-s` flags groups
-  those speakers and plays in sync.
+  `"slow focus"` resolves to `slow-focus`. Multiple `-s` flags group those
+  speakers and play in sync. The listed speakers become the **exact** group — any
+  other speakers they were grouped with are dropped (stopped), so `-s` controls
+  precisely where playback happens.
 - `houseparty stop -s NAME` — stop playback (stopping any speaker in a group
   stops the whole group).
 - `houseparty next -s NAME` / `houseparty previous -s NAME` — skip to the next /
@@ -170,6 +172,9 @@ Spotify tips for agents:
 - Quote speaker names that contain spaces, e.g. `-s "Living Room"`.
 - To switch stations, just run another `play` on the same speaker(s); it
   replaces what is playing.
+- **Moving music between rooms:** `play`/`spotify play` target an exact set of
+  speakers. To move what's playing to one room, replay it with just that `-s`
+  (the other rooms drop out). To add a room, list all the rooms you want.
 - **Recommending a vibe?** Run `houseparty list --json` and match the user's mood
   to an infinite mixtape's `subtitle`, then play that mixtape's `alias`. The
   mixtapes are the easy win for "set a mood in the house" — no track-picking.

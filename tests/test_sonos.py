@@ -8,6 +8,7 @@ from houseparty import sonos
 def _fake_speaker(name: str) -> MagicMock:
     sp = MagicMock(name=name)
     sp.player_name = name
+    sp.group = None  # standalone by default; _form_group skips the drop scan
     return sp
 
 
@@ -71,6 +72,36 @@ def test_now_playing_includes_spotify_track_from_queue():
     assert info["track_artist"] == "Jack Garratt"
     assert info["track_title"] == "Pillars"
     assert info["track_album"] == "The Tension Between"
+
+
+def test_form_group_isolates_targets_and_drops_extras():
+    # one group of three; only two are targets, so the third is dropped
+    coord = MagicMock(); coord.uid = "C"
+    m2 = MagicMock(); m2.uid = "M2"
+    extra = MagicMock(); extra.uid = "E"
+    group = MagicMock(); group.members = [coord, m2, extra]
+    coord.group = m2.group = extra.group = group
+
+    result = sonos._form_group([coord, m2])
+
+    extra.unjoin.assert_called_once()       # non-target dropped (stops)
+    coord.unjoin.assert_called_once()       # coordinator detached from old group
+    m2.join.assert_called_once_with(coord)  # target regrouped onto coordinator
+    assert result is coord
+
+
+def test_form_group_single_target_leaves_its_group_alone():
+    # play on just the bathroom -> kitchen + move (its groupmates) are dropped
+    bath = MagicMock(); bath.uid = "B"
+    kitchen = MagicMock(); kitchen.uid = "K"
+    move = MagicMock(); move.uid = "MV"
+    group = MagicMock(); group.members = [kitchen, move, bath]
+    bath.group = group
+
+    sonos._form_group([bath])
+
+    kitchen.unjoin.assert_called_once()
+    move.unjoin.assert_called_once()
 
 
 def test_skip_next_issues_one_next_per_group():
