@@ -17,6 +17,7 @@ import re
 from dataclasses import dataclass, field
 
 import spotipy
+from spotipy.cache_handler import CacheFileHandler
 from spotipy.oauth2 import SpotifyOAuth
 
 from .config import Config, spotify_token_path
@@ -86,7 +87,7 @@ def _auth_manager(
         client_secret=client_secret,
         redirect_uri=redirect_uri or sp_cfg.redirect_uri,
         scope=SCOPES,
-        cache_path=str(spotify_token_path()),
+        cache_handler=CacheFileHandler(cache_path=str(spotify_token_path())),
         open_browser=open_browser,
     )
 
