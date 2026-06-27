@@ -144,13 +144,21 @@ def now(speaker: Optional[list[str]] = SpeakerOpt) -> None:
         cfg = Config.load()
         try:
             speakers = sonos.resolve_speakers(list(speaker), cfg.speaker_ips)
-        except sonos.SonosError as exc:
+            mixtapes = nts.fetch_mixtapes()
+        except (sonos.SonosError, nts.NTSError) as exc:
             _fail(str(exc))
         for sp, name in zip(speakers, speaker):
             info = sonos.now_playing(sp)
             state = info.get("transport_state", "")
-            line = info.get("title") or info.get("uri") or "—"
-            console.print(f"[bold]{name}[/] [{state}]: {line}")
+            # Identify against the live catalog first (ground truth, survives NTS
+            # relabeling a slug), then fall back to the title Sonos has embedded.
+            label = (
+                nts.identify(info.get("source_uri", ""), mixtapes)
+                or info.get("source_title")
+                or info.get("source_uri")
+                or "—"
+            )
+            console.print(f"[bold]{name}[/] [{state}]: {label}")
 
 
 @app.command()

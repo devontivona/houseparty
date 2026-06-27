@@ -12,7 +12,8 @@ SAMPLE = {
             "title": "Poolside",
             "subtitle": "Sun-soaked and degraded",
             "audio_stream_endpoint": "https://stream-mixtape-geo.ntslive.net/mixtape4",
-            "audio_stream_endpoint_hls_aac": "https://streams.radiomast.io/x/hls.m3u8",
+            "audio_stream_endpoint_hls_aac": "https://streams.radiomast.io/e7bc1d1a-da3a-492f-8ecd-d5b4d503799f/hls.m3u8",
+            "audio_stream_endpoint_hls_mp3": "https://streams.radiomast.io/052d2e3c-389c-44cf-a91a-8f5e1854f4c6/hls.m3u8",
         },
         {
             "mixtape_alias": "slow-focus",
@@ -66,3 +67,32 @@ def test_resolve_unknown_raises_with_options():
         nts.resolve("definitely-not-a-channel", mixtapes=_catalog())
     msg = str(exc.value)
     assert "poolside" in msg and "slow-focus" in msg
+
+
+def test_parse_mixtapes_extracts_uuids():
+    poolside = nts._parse_mixtapes(SAMPLE)[0]
+    assert "052d2e3c-389c-44cf-a91a-8f5e1854f4c6" in poolside.uuids
+    assert "e7bc1d1a-da3a-492f-8ecd-d5b4d503799f" in poolside.uuids
+
+
+def test_identify_live_station():
+    # un-redirected CurrentURI as Sonos reports it via GetMediaInfo
+    assert nts.identify("x-rincon-mp3radio://stream-relay-geo.ntslive.net/stream") == "NTS 1"
+    assert nts.identify("x-rincon-mp3radio://stream-relay-geo.ntslive.net/stream2") == "NTS 2"
+
+
+def test_identify_mixtape_by_path():
+    # the un-redirected mixtape URI (host/path)
+    uri = "x-rincon-mp3radio://stream-mixtape-geo.ntslive.net/mixtape4"
+    assert nts.identify(uri, mixtapes=_catalog()) == "Poolside"
+
+
+def test_identify_mixtape_by_redirected_uuid():
+    # the redirected radiomast edge URL, identified via its UUID
+    uri = "x-rincon-mp3radio://https://audio-edge-4ev3b.lax.g.radiomast.io/052d2e3c-389c-44cf-a91a-8f5e1854f4c6"
+    assert nts.identify(uri, mixtapes=_catalog()) == "Poolside"
+
+
+def test_identify_unknown_returns_none():
+    assert nts.identify("", mixtapes=_catalog()) is None
+    assert nts.identify("x-rincon-mp3radio://example.com/whatever", mixtapes=_catalog()) is None

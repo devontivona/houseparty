@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -47,6 +48,9 @@ class Mixtape:
     title: str
     subtitle: str
     stream_url: str
+    # radiomast stream UUIDs (from the HLS endpoints); used to identify a
+    # currently-playing stream even when Sonos only exposes the redirected URL.
+    uuids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -62,6 +66,11 @@ def _cache_file() -> Path:
     return config_dir() / "mixtapes.json"
 
 
+_UUID_RE = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.IGNORECASE
+)
+
+
 def _parse_mixtapes(payload: dict) -> list[Mixtape]:
     out: list[Mixtape] = []
     for item in payload.get("results", []):
@@ -69,12 +78,18 @@ def _parse_mixtapes(payload: dict) -> list[Mixtape]:
         alias = item.get("mixtape_alias")
         if not url or not alias:
             continue
+        uuids = []
+        for key in ("audio_stream_endpoint_hls_aac", "audio_stream_endpoint_hls_mp3"):
+            m = _UUID_RE.search(item.get(key) or "")
+            if m:
+                uuids.append(m.group(0).lower())
         out.append(
             Mixtape(
                 alias=alias,
                 title=item.get("title", alias),
                 subtitle=item.get("subtitle", ""),
                 stream_url=url,
+                uuids=tuple(uuids),
             )
         )
     return out
@@ -176,3 +191,41 @@ def resolve(target: str, mixtapes: list[Mixtape] | None = None) -> tuple[str, st
 
     options = ", ".join(["1", "2", *sorted(mt.alias for mt in mixtapes)])
     raise NTSError(f"Unknown station/mixtape {target!r}. Options: {options}")
+
+
+def _uri_core(uri: str) -> str:
+    """Strip any URI scheme(s) and trailing slash: keep ``host/path``.
+
+    Sonos wraps stream URLs as ``x-rincon-mp3radio://https://host/path`` (or
+    ``x-rincon-mp3radio://host/path``), so we take everything after the last
+    ``://``.
+    """
+    return uri.strip().rsplit("://", 1)[-1].rstrip("/")
+
+
+def identify(uri: str, mixtapes: list[Mixtape] | None = None) -> str | None:
+    """Best-effort name for a currently-playing stream URI.
+
+    Cross-references the URI against the live-station URLs and the mixtape
+    catalog: first by host/path (handles the un-redirected ``CurrentURI`` that
+    Sonos reports via ``GetMediaInfo``), then by the radiomast UUID (handles the
+    redirected edge URL). Returns ``None`` if nothing matches.
+    """
+    if not uri:
+        return None
+    core = _uri_core(uri)
+
+    for _key, (name, url) in LIVE_STATIONS.items():
+        if core == _uri_core(url) or core.endswith("/" + _uri_core(url).split("/", 1)[-1]):
+            return name
+
+    if mixtapes is None:
+        mixtapes = fetch_mixtapes()
+
+    tail = core.rsplit("/", 1)[-1].lower()  # e.g. "mixtape36" or a bare UUID
+    for mt in mixtapes:
+        if tail == _uri_core(mt.stream_url).rsplit("/", 1)[-1].lower():
+            return mt.title
+        if tail in mt.uuids:
+            return mt.title
+    return None

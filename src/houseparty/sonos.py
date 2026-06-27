@@ -13,6 +13,8 @@ name shows in the app.
 
 from __future__ import annotations
 
+import html
+import re
 from dataclasses import dataclass
 
 import soco
@@ -112,14 +114,27 @@ def set_volume(speakers: list[SoCo], level: int) -> None:
         sp.volume = level
 
 
+_TITLE_RE = re.compile(r"<dc:title>(.*?)</dc:title>", re.DOTALL)
+
+
 def now_playing(speaker: SoCo) -> dict[str, str]:
-    """Return the speaker's current track info (title/artist/uri/state)."""
+    """Return what a speaker is playing.
+
+    Reads ``GetMediaInfo`` (not just the track info): it carries the original,
+    un-redirected ``CurrentURI`` we enqueued and the ``dc:title`` we embedded —
+    far more useful than the track-level info, whose title is blank for radio
+    and whose URI is the post-redirect edge URL.
+    """
     coordinator = speaker.group.coordinator if speaker.group else speaker
-    info = coordinator.get_current_track_info()
-    info["transport_state"] = coordinator.get_current_transport_info().get(
-        "current_transport_state", ""
-    )
-    return info
+    media = coordinator.avTransport.GetMediaInfo([("InstanceID", 0)])
+    state = coordinator.get_current_transport_info().get("current_transport_state", "")
+
+    embedded = _TITLE_RE.search(media.get("CurrentURIMetaData") or "")
+    return {
+        "transport_state": state,
+        "source_uri": media.get("CurrentURI", ""),
+        "source_title": html.unescape(embedded.group(1)) if embedded else "",
+    }
 
 
 def _clamp_volume(level: int) -> int:
