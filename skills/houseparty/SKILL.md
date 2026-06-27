@@ -4,7 +4,7 @@ description: Streams NTS Radio (live stations + infinite mixtapes) and Spotify (
 license: MIT
 metadata:
   homepage: https://github.com/devontivona/houseparty
-  version: "0.2.4"
+  version: "0.2.5"
 compatibility: Requires Python 3.10+, the uv tool, and a Sonos system reachable on the local network.
 allowed-tools: Bash(houseparty:*) Bash(uv:*)
 ---
@@ -84,8 +84,8 @@ Check it is available with `houseparty --help`.
 
 ## Spotify
 
-houseparty can also search Spotify and play results on Sonos. All commands take
-`--json` for structured, agent-friendly output.
+houseparty can also search Spotify and play results on Sonos. The search, play,
+and library commands take `--json` for structured, agent-friendly output.
 
 One-time setup (required before any Spotify command works):
 
@@ -112,6 +112,8 @@ One-time setup (required before any Spotify command works):
 
 Spotify commands:
 
+- `houseparty spotify auth [--response URL] [--redirect-uri URL]` — log in
+  (two-step, non-interactive; see setup above). Run once.
 - `houseparty spotify search QUERY [--type artist,album,playlist,track] [--limit N] [--json]`
   — search the catalog. Returns each result's `kind`, `name`, `detail`, `uri`,
   and `url`.
