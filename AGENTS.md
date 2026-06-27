@@ -33,16 +33,19 @@ working on 3.10 — see the `tomllib` note below.
 src/houseparty/
   cli.py      # Typer app: all commands, arg parsing, Rich output. The ONLY user-facing layer.
   nts.py      # NTS API client: catalog (24h cache), now-playing, resolve(), identify()
-  sonos.py    # SoCo wrappers: discovery, grouped playback, volume, now_playing()
-  config.py   # ~/.config/houseparty/config.toml: default speakers, volume, cached IPs
+  spotify.py  # Spotify Web API (spotipy/OAuth): search(), resolve(), library, SearchResult
+  sonos.py    # SoCo wrappers: discovery, grouped playback, volume, now_playing(), play_spotify()
+  config.py   # ~/.config/houseparty/config.toml: speakers, volume, cached IPs, [spotify] creds
 tests/        # offline, mocked (no network, no hardware)
 skills/houseparty/SKILL.md   # agentskills-spec skill (npx skills add devontivona/houseparty)
 ```
 
 Keep the layering clean: `cli.py` orchestrates; domain logic lives in
-`nts.py`/`sonos.py`. Errors that should reach the user are raised as
-`nts.NTSError` / `sonos.SonosError` and rendered by `cli._fail()` — don't print
-from the domain modules.
+`nts.py` / `spotify.py` / `sonos.py`. Errors that should reach the user are
+raised as `nts.NTSError` / `spotify.SpotifyError` / `sonos.SonosError` and
+rendered by `cli._fail()` — don't print from the domain modules. Read/play
+commands should support `--json` for agent consumption (see the `spotify`
+subgroup).
 
 ## Project-specific gotchas (don't relearn these the hard way)
 
@@ -61,6 +64,17 @@ from the domain modules.
   imports, keep that fallback and test under 3.10.
 - **Sonos room names often include a suffix** (e.g. "Kitchen Speaker") and are
   case-sensitive. Code and docs should resolve names via discovery, never guess.
+- **Spotify is queue-based, not a stream.** `sonos.play_spotify()` uses
+  `ShareLinkPlugin.add_share_link_to_queue()` (returns a **1-based** index), then
+  `play_from_queue(idx - 1)` (**0-based**) — keep that conversion. Sonos doesn't
+  auto-play the queue.
+- **ShareLinkPlugin can't queue an artist** — `spotify.resolve()` expands an
+  artist to its top-track URIs; `play_spotify` enqueues them all.
+- **Spotify failures are usually "not linked."** SoCo can't link the service; a
+  UPnP 800 on enqueue means the user must add Spotify in their Sonos app. Surface
+  that, don't swallow it.
+- **No Spotify playback/Connect scopes** — playback is local via SoCo. Only
+  request the read scopes in `spotify.SCOPES`.
 
 ## Testing
 

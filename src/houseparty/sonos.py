@@ -20,6 +20,9 @@ from dataclasses import dataclass
 import soco
 from soco import SoCo
 from soco.discovery import by_name, scan_network
+from soco.exceptions import SoCoException
+from soco.music_services import MusicService
+from soco.plugins.sharelink import ShareLinkPlugin
 
 
 class SonosError(RuntimeError):
@@ -100,6 +103,83 @@ def play(
             sp.volume = _clamp_volume(volume)
 
     coordinator.play_uri(url, title=title, force_radio=True)
+
+
+def spotify_linked(speaker: SoCo | None = None) -> bool:
+    """Whether Spotify is available as a music service on this Sonos household.
+
+    SoCo can't link the service — the user must add it in the Sonos app. This is
+    a best-effort pre-flight; the deeper "present but no account" case is still
+    caught when enqueuing fails. Note SoCo exposes available services, not
+    per-account subscription state, so this can't perfectly distinguish the two.
+    """
+    try:
+        names = MusicService.get_all_music_services_names()
+    except Exception:  # noqa: BLE001 - any lookup failure -> treat as unknown
+        return False
+    return any("spotify" in n.lower() for n in names)
+
+
+def play_spotify(
+    speakers: list[SoCo],
+    links: list[str],
+    label: str = "",
+    mode: str = "now",
+    volume: int | None = None,
+) -> None:
+    """Enqueue and play Spotify ``links`` on the given speakers.
+
+    Spotify is queue-based (unlike radio streams): each link is added to the
+    coordinator's queue via ShareLinkPlugin, then played. ``links`` is normally
+    one item, but several for an artist (its top tracks). ``mode``:
+    ``now`` clears the queue and starts playback; ``add`` appends; ``next``
+    inserts after the current track.
+    """
+    if not speakers:
+        raise SonosError("No speakers to play on.")
+    if not links:
+        raise SonosError("Nothing to play.")
+
+    coordinator = speakers[0]
+    for member in speakers[1:]:
+        member.join(coordinator)
+    if volume is not None:
+        for sp in speakers:
+            sp.volume = _clamp_volume(volume)
+
+    share = ShareLinkPlugin(coordinator)
+    if mode == "now":
+        coordinator.clear_queue()
+
+    # Insert position is 1-based; 0 means append to the end of the queue.
+    position = 0
+    if mode == "next":
+        try:
+            cur = int(coordinator.get_current_track_info().get("playlist_position") or 0)
+            position = cur + 1 if cur else 0
+        except (TypeError, ValueError):
+            position = 0
+
+    first_idx: int | None = None
+    try:
+        for offset, link in enumerate(links):
+            pos = position + offset if position else 0
+            idx = share.add_share_link_to_queue(link, position=pos)
+            if first_idx is None:
+                first_idx = idx
+    except SoCoException as exc:
+        # Enqueue failures here are overwhelmingly UPnP 800 = Spotify not usable
+        # for this household (not linked / wrong region). Point there, and keep
+        # the raw error for debugging.
+        raise SonosError(
+            "Couldn't add the Spotify item to Sonos. This usually means Spotify "
+            "isn't linked in your Sonos app for this household — add it in the "
+            f"Sonos app (Settings > Services), then retry. (Sonos said: {exc})"
+        ) from exc
+
+    if mode == "now" and first_idx:
+        # add_share_link_to_queue returns a 1-based index; play_from_queue is 0-based.
+        coordinator.play_from_queue(first_idx - 1)
 
 
 def stop(speakers: list[SoCo]) -> None:

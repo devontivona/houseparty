@@ -1,14 +1,15 @@
-"""houseparty CLI — stream NTS Radio to Sonos speakers."""
+"""houseparty CLI — stream NTS Radio and Spotify to Sonos speakers."""
 
 from __future__ import annotations
 
+import json
 from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from . import nts, sonos
+from . import nts, sonos, spotify
 from .config import Config
 
 app = typer.Typer(
@@ -191,6 +192,11 @@ def config_show() -> None:
     console.print(f"default_speakers = {cfg.default_speakers}")
     console.print(f"default_volume   = {cfg.default_volume}")
     console.print(f"speaker_ips      = {cfg.speaker_ips}")
+    sp = cfg.spotify
+    have_creds = bool(sp.resolved_client_id() and sp.resolved_client_secret())
+    console.print(f"spotify.client   = {'configured' if have_creds else 'not set'}")
+    console.print(f"spotify.market   = {sp.market}")
+    console.print(f"spotify.redirect = {sp.redirect_uri}")
 
 
 @config_app.command("set-default")
@@ -213,6 +219,156 @@ def config_set_volume(
     cfg.default_volume = max(0, min(100, level))
     path = cfg.save()
     console.print(f"[green]✓[/] default_volume = {cfg.default_volume} ({path})")
+
+
+spotify_app = typer.Typer(no_args_is_help=True, help="Search and play Spotify on Sonos.")
+app.add_typer(spotify_app, name="spotify")
+
+
+def _emit_json(data) -> None:
+    """Print plain JSON to stdout (for agent/script consumption)."""
+    typer.echo(json.dumps(data, indent=2))
+
+
+def _results_table(title: str, results: list[spotify.SearchResult]) -> Table:
+    table = Table(title=title, show_edge=False, pad_edge=False)
+    table.add_column("#", style="dim")
+    table.add_column("kind", style="cyan")
+    table.add_column("name")
+    table.add_column("detail", style="dim")
+    table.add_column("uri", style="dim")
+    for i, r in enumerate(results, 1):
+        table.add_row(str(i), r.kind, r.name, r.detail, r.uri)
+    return table
+
+
+@spotify_app.command("auth")
+def spotify_auth(
+    no_browser: bool = typer.Option(
+        False, "--no-browser", help="Print the login URL to open manually (headless/SSH)."
+    ),
+) -> None:
+    """Authenticate with Spotify (one-time browser login)."""
+    cfg = Config.load()
+    try:
+        me = spotify.authenticate(cfg, open_browser=not no_browser)
+    except spotify.SpotifyError as exc:
+        _fail(str(exc))
+    who = me.get("display_name") or me.get("id") or "unknown"
+    console.print(f"[green]✓[/] Authenticated with Spotify as [bold]{who}[/].")
+
+
+@spotify_app.command("search")
+def spotify_search(
+    query: str = typer.Argument(..., help="Search text."),
+    type_: Optional[str] = typer.Option(
+        None, "--type", "-t", help="Comma-separated: artist,album,playlist,track."
+    ),
+    limit: int = typer.Option(5, "--limit", "-n", help="Results per type."),
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON for scripting."),
+) -> None:
+    """Search Spotify for artists, albums, playlists, and tracks."""
+    cfg = Config.load()
+    kinds = [k.strip() for k in type_.split(",")] if type_ else None
+    try:
+        results = spotify.search(query, kinds=kinds, limit=limit, market=cfg.spotify.market)
+    except spotify.SpotifyError as exc:
+        _fail(str(exc))
+    if json_out:
+        _emit_json([r.as_dict() for r in results])
+        return
+    if not results:
+        console.print("No results.")
+        return
+    console.print(_results_table(f"Spotify: {query}", results))
+
+
+@spotify_app.command("play")
+def spotify_play(
+    target: str = typer.Argument(..., help="Query, spotify: URI, or open.spotify.com link."),
+    speaker: Optional[list[str]] = SpeakerOpt,
+    type_: Optional[str] = typer.Option(
+        None, "--type", "-t", help="For a text query: artist|album|playlist|track (default track)."
+    ),
+    add: bool = typer.Option(False, "--add", help="Append to the queue instead of playing now."),
+    next_: bool = typer.Option(False, "--next", help="Insert after the current track."),
+    volume: Optional[int] = typer.Option(None, "--volume", "-v", help="Set volume (0-100)."),
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON for scripting."),
+) -> None:
+    """Play a Spotify track/album/playlist/artist on one or more speakers."""
+    cfg = Config.load()
+    names = _resolve_speaker_names(speaker, cfg)
+    mode = "add" if add else "next" if next_ else "now"
+    vol = volume if volume is not None else cfg.default_volume
+    try:
+        target_info = spotify.resolve(target, market=cfg.spotify.market, kind=type_)
+    except spotify.SpotifyError as exc:
+        _fail(str(exc))
+    try:
+        speakers = sonos.resolve_speakers(names, cfg.speaker_ips)
+        sonos.play_spotify(
+            speakers, list(target_info.links), label=target_info.label, mode=mode, volume=vol
+        )
+    except sonos.SonosError as exc:
+        _fail(str(exc))
+    if json_out:
+        _emit_json({"played": target_info.as_dict(), "speakers": names, "mode": mode})
+        return
+    verb = {"now": "Playing", "add": "Queued", "next": "Up next"}[mode]
+    console.print(f"[green]▶[/] {verb} [bold]{target_info.label}[/] on [bold]{', '.join(names)}[/].")
+
+
+@spotify_app.command("playlists")
+def spotify_playlists(
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON for scripting."),
+) -> None:
+    """List your Spotify playlists (requires `spotify auth`)."""
+    try:
+        results = spotify.my_playlists()
+    except spotify.SpotifyError as exc:
+        _fail(str(exc))
+    if json_out:
+        _emit_json([r.as_dict() for r in results])
+        return
+    console.print(_results_table("Your Playlists", results))
+
+
+@spotify_app.command("liked")
+def spotify_liked(
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON for scripting."),
+) -> None:
+    """List your liked/saved songs (requires `spotify auth`)."""
+    try:
+        results = spotify.my_saved_tracks()
+    except spotify.SpotifyError as exc:
+        _fail(str(exc))
+    if json_out:
+        _emit_json([r.as_dict() for r in results])
+        return
+    console.print(_results_table("Your Liked Songs", results))
+
+
+@spotify_app.command("set-client")
+def spotify_set_client(
+    client_id: str = typer.Argument(..., help="Spotify app client ID."),
+    client_secret: str = typer.Argument(..., help="Spotify app client secret."),
+    market: Optional[str] = typer.Option(None, "--market", help="Default market, e.g. US, GB."),
+    redirect_uri: Optional[str] = typer.Option(None, "--redirect-uri", help="OAuth redirect URI."),
+) -> None:
+    """Store Spotify app credentials in config."""
+    cfg = Config.load()
+    cfg.spotify.client_id = client_id
+    cfg.spotify.client_secret = client_secret
+    if market:
+        cfg.spotify.market = market
+    if redirect_uri:
+        cfg.spotify.redirect_uri = redirect_uri
+    path = cfg.save()
+    console.print(f"[green]✓[/] Saved Spotify credentials ({path}).")
+    console.print(
+        f"Register this redirect URI in your Spotify app dashboard: "
+        f"[bold]{cfg.spotify.redirect_uri}[/]"
+    )
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 ---
 name: houseparty
-description: Streams NTS Radio live stations and infinite mixtapes to Sonos speakers using the houseparty CLI. Use when the user wants to play, switch, stop, or control NTS Radio on their Sonos, choose which speaker or room, group multiple speakers, set volume, or see what is currently on air.
+description: Streams NTS Radio (live stations + infinite mixtapes) and Spotify (search/play tracks, albums, playlists, artists, and the user's library) to Sonos speakers using the houseparty CLI. Use when the user wants to play, switch, stop, or control NTS Radio or Spotify on their Sonos, search for music, choose which speaker or room, group speakers, set volume, or see what is currently on air.
 license: MIT
 metadata:
   homepage: https://github.com/devontivona/houseparty
-  version: "0.1.0"
+  version: "0.2.0"
 compatibility: Requires Python 3.10+, the uv tool, and a Sonos system reachable on the local network.
 allowed-tools: Bash(houseparty:*) Bash(uv:*)
 ---
@@ -81,6 +81,47 @@ Check it is available with `houseparty --help`.
 - `houseparty config set-default NAME [NAME ...]` — set default speakers used
   when `-s` is omitted.
 - `houseparty config set-volume N` — set a default volume applied on play.
+
+## Spotify
+
+houseparty can also search Spotify and play results on Sonos. All commands take
+`--json` for structured, agent-friendly output.
+
+One-time setup (required before any Spotify command works):
+
+1. The user needs **Spotify Premium** and must have **linked Spotify in their
+   Sonos app** (Settings > Services). houseparty cannot link it.
+2. Create a Spotify developer app at developer.spotify.com → get a client ID and
+   secret, and register the redirect URI `http://127.0.0.1:8080/callback`.
+3. Store credentials: `houseparty spotify set-client <CLIENT_ID> <CLIENT_SECRET>`
+   (or set `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`).
+4. Authenticate once: `houseparty spotify auth` (browser login; use
+   `--no-browser` on a headless/SSH host to get a paste-able URL).
+
+Spotify commands:
+
+- `houseparty spotify search QUERY [--type artist,album,playlist,track] [--limit N] [--json]`
+  — search the catalog. Returns each result's `kind`, `name`, `detail`, `uri`,
+  and `url`.
+- `houseparty spotify play TARGET -s NAME [--type T] [--add|--next] [--volume N] [--json]`
+  — TARGET is a free-text query (plays the top match), a `spotify:` URI, or an
+  open.spotify.com link. Tracks/albums/playlists play directly; an **artist**
+  plays their top tracks. `--add` appends to the queue, `--next` plays after the
+  current track.
+- `houseparty spotify playlists [--json]` — the user's own playlists.
+- `houseparty spotify liked [--json]` — the user's liked/saved songs.
+- `houseparty spotify set-client ID SECRET [--market US] [--redirect-uri URL]` —
+  store credentials/settings.
+
+Spotify tips for agents:
+
+- Prefer `spotify search QUERY --json` to find the exact item, then
+  `spotify play <uri>` with the chosen `uri` for precise playback, rather than
+  relying on the free-text top match.
+- If a play command errors that Spotify "isn't linked," the user must add
+  Spotify in their Sonos app first — this cannot be fixed from the CLI.
+- Spotify playback uses the Sonos queue (not a radio stream), so
+  `houseparty now` shows the current track title.
 
 ## Tips for agents
 

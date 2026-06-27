@@ -1,7 +1,7 @@
 [project]
 name = "houseparty"
-version = "0.1.0"
-description = "Stream NTS Radio (live stations + infinite mixtapes) to Sonos speakers"
+version = "0.2.0"
+description = "Stream NTS Radio and Spotify to Sonos speakers"
 readme = "README.md"
 authors = [
     { name = "Devon Tivona", email = "devon@tivona.me" }
@@ -10,6 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
     "httpx>=0.28.1",
     "soco>=0.31.1",
+    "spotipy>=2.26.0",
     "tomli>=2.0 ; python_full_version < '3.11'",
     "tomli-w>=1.2.0",
     "typer>=0.26.8",
