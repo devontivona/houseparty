@@ -67,12 +67,31 @@ def _now_label(info: dict, mixtapes) -> str:
 @app.command("list")
 def list_content(
     refresh: bool = typer.Option(False, "--refresh", help="Force-refresh the mixtape catalog."),
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON for scripting."),
 ) -> None:
-    """List the live stations and current infinite mixtapes."""
+    """List the live stations and current infinite mixtapes.
+
+    Each mixtape's subtitle describes its vibe — useful for recommending a mood.
+    Use `--json` for structured output.
+    """
     try:
         mixtapes = nts.fetch_mixtapes(force_refresh=refresh)
     except nts.NTSError as exc:
         _fail(str(exc))
+
+    if json_out:
+        _emit_json(
+            {
+                "stations": [
+                    {"key": key, "name": name} for key, (name, _u) in nts.LIVE_STATIONS.items()
+                ],
+                "mixtapes": [
+                    {"alias": mt.alias, "title": mt.title, "subtitle": mt.subtitle}
+                    for mt in sorted(mixtapes, key=lambda m: m.alias)
+                ],
+            }
+        )
+        return
 
     stations = Table(title="Live Stations", show_edge=False, pad_edge=False)
     stations.add_column("key", style="bold cyan")

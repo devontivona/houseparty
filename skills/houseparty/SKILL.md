@@ -1,20 +1,42 @@
 ---
 name: houseparty
-description: Streams NTS Radio (live stations + infinite mixtapes) and Spotify (search/play tracks, albums, playlists, artists, and the user's library) to Sonos speakers using the houseparty CLI. Use when the user wants to play, switch, stop, or control NTS Radio or Spotify on their Sonos, search for music, choose which speaker or room, group speakers, set volume, or see what is currently on air.
+description: Streams NTS Radio (live stations + always-on infinite mixtapes) and Spotify (search/play tracks, albums, playlists, artists, and the user's library) to Sonos speakers using the houseparty CLI. Use when the user wants to play, switch, stop, or control NTS Radio or Spotify on their Sonos, search for music, set a mood or vibe in the house (the NTS infinite mixtapes are ideal for this), choose which speaker or room, group speakers, set volume, or see what is currently on air.
 license: MIT
 metadata:
   homepage: https://github.com/devontivona/houseparty
-  version: "0.2.5"
+  version: "0.2.6"
 compatibility: Requires Python 3.10+, the uv tool, and a Sonos system reachable on the local network.
 allowed-tools: Bash(houseparty:*) Bash(uv:*)
 ---
 
-# houseparty: NTS Radio on Sonos
+# houseparty: NTS Radio & Spotify on Sonos
 
-`houseparty` is a command-line tool that streams NTS Radio — both live stations
-(NTS 1 / NTS 2) and the always-on "infinite mixtapes" — to Sonos speakers on the
-local network. It controls Sonos directly over the LAN (no cloud account), and
-pulls the NTS catalog live so the mixtape lineup is always current.
+`houseparty` is a command-line tool that streams **NTS Radio** and **Spotify** to
+Sonos speakers on the local network. It controls Sonos directly over the LAN (no
+cloud account needed for control).
+
+## About NTS
+
+NTS is a free, always-on internet radio station with two **live channels**
+(NTS 1 and NTS 2) of human-curated, DJ-hosted shows spanning every genre. It also
+runs a set of **infinite mixtapes** — themed, always-on channels (e.g. ambient,
+disco, dub, lo-fi hip-hop, classical) that play continuously with no schedule.
+
+The infinite mixtapes are the standout feature for a Sonos setup: each one is a
+ready-made **vibe** for the house — pick by mood (focus, party, wind-down,
+dinner) rather than by track. The lineup changes over time, so always read the
+**current** list rather than assuming. Each mixtape's subtitle describes its
+mood, which is exactly what you use to recommend one:
+
+```
+houseparty list           # human-readable: stations + current mixtapes + vibe subtitles
+houseparty list --json    # structured: {stations:[...], mixtapes:[{alias,title,subtitle}]}
+```
+
+To set a mood, run `houseparty list --json`, match the user's desired vibe
+against the mixtape subtitles, then `houseparty play <alias> -s <speaker>`
+(e.g. "something chill for dinner" → `slow-focus` or `poolside`). The catalog is
+fetched live and cached, so it always reflects what's actually on air.
 
 ## Install
 
@@ -63,8 +85,10 @@ Check it is available with `houseparty --help`.
 
 ## Command reference
 
-- `houseparty list` — show live stations and the current infinite mixtapes.
-  Add `--refresh` to force-refresh the cached catalog.
+- `houseparty list [--json] [--refresh]` — show the live stations and the
+  current infinite mixtapes, each with a subtitle describing its vibe. Use
+  `--json` to recommend a mood programmatically; `--refresh` forces a catalog
+  refresh.
 - `houseparty play TARGET -s NAME [-s NAME ...] [--volume N]` — play a station
   or mixtape. TARGET is `1` or `2` for the live stations, or a mixtape alias or
   title. Matching is case- and hyphen-insensitive with a fuzzy fallback, so
@@ -144,6 +168,9 @@ Spotify tips for agents:
 - Quote speaker names that contain spaces, e.g. `-s "Living Room"`.
 - To switch stations, just run another `play` on the same speaker(s); it
   replaces what is playing.
+- **Recommending a vibe?** Run `houseparty list --json` and match the user's mood
+  to an infinite mixtape's `subtitle`, then play that mixtape's `alias`. The
+  mixtapes are the easy win for "set a mood in the house" — no track-picking.
 - If the user sets defaults via `config set-default`, the `-s` flag can be
   omitted and the tool uses the configured speakers.
 - Playing audio is an action the user hears in their home — confirm the target
