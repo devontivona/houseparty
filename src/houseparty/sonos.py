@@ -80,17 +80,18 @@ def resolve_speakers(names: list[str], speaker_ips: dict[str, str] | None = None
     return [_find_one(n, speaker_ips) for n in names]
 
 
-def _form_group(speakers: list[SoCo]) -> SoCo:
-    """Make ``speakers`` an exclusive playback group and return the coordinator.
+def _form_group(speakers: list[SoCo]) -> tuple[SoCo, list[str]]:
+    """Make ``speakers`` an exclusive group; return (coordinator, skipped names).
 
     Any speaker currently grouped with a target but NOT in the target list is
     dropped (unjoined, which stops it), so `play ... -s X` means "play on exactly
-    X" rather than adding to whatever group X was already in.
+    X". A member that fails to join (e.g. a wedged speaker returning UPnP 501) is
+    skipped rather than aborting the whole operation; the coordinator must work.
     """
     coordinator = speakers[0]
     target_uids = {s.uid for s in speakers}
 
-    # Drop speakers grouped with a target but not themselves a target.
+    # Drop speakers grouped with a target but not themselves a target (best-effort).
     extras: dict[str, SoCo] = {}
     for s in speakers:
         grp = getattr(s, "group", None)
@@ -99,13 +100,28 @@ def _form_group(speakers: list[SoCo]) -> SoCo:
                 if m.uid not in target_uids:
                     extras[m.uid] = m
     for m in extras.values():
-        m.unjoin()
+        try:
+            m.unjoin()
+        except SoCoException:
+            pass
 
-    # Detach the coordinator from any prior group, then attach the listed members.
-    coordinator.unjoin()
+    # The coordinator must be controllable — fail clearly if not.
+    try:
+        coordinator.unjoin()
+    except SoCoException as exc:
+        raise SonosError(
+            f"Can't play on {coordinator.player_name!r}: {exc}. "
+            "The speaker may need a power-cycle."
+        ) from exc
+
+    # Members that fail to join are skipped, not fatal.
+    skipped: list[str] = []
     for member in speakers[1:]:
-        member.join(coordinator)
-    return coordinator
+        try:
+            member.join(coordinator)
+        except SoCoException:
+            skipped.append(member.player_name)
+    return coordinator, skipped
 
 
 def play(
@@ -113,22 +129,25 @@ def play(
     title: str,
     url: str,
     volume: int | None = None,
-) -> None:
-    """Play ``url`` on exactly the given speakers (grouped if more than one).
+) -> list[str]:
+    """Play ``url`` on exactly the given speakers; return any that were skipped.
 
     The listed speakers become an exclusive group; any other speakers that were
-    grouped with them are dropped. Playback is sent to the coordinator.
+    grouped with them are dropped. A speaker that can't join is skipped.
     """
     if not speakers:
         raise SonosError("No speakers to play on.")
 
-    coordinator = _form_group(speakers)
+    coordinator, skipped = _form_group(speakers)
+    _apply_volume(speakers, skipped, volume)
 
-    if volume is not None:
-        for sp in speakers:
-            sp.volume = _clamp_volume(volume)
-
-    coordinator.play_uri(url, title=title, force_radio=True)
+    try:
+        coordinator.play_uri(url, title=title, force_radio=True)
+    except SoCoException as exc:
+        raise SonosError(
+            f"Couldn't start playback on {coordinator.player_name!r}: {exc}"
+        ) from exc
+    return skipped
 
 
 def spotify_linked(speaker: SoCo | None = None) -> bool:
@@ -152,24 +171,22 @@ def play_spotify(
     label: str = "",
     mode: str = "now",
     volume: int | None = None,
-) -> None:
-    """Enqueue and play Spotify ``links`` on the given speakers.
+) -> list[str]:
+    """Enqueue and play Spotify ``links`` on the given speakers; return skipped.
 
     Spotify is queue-based (unlike radio streams): each link is added to the
     coordinator's queue via ShareLinkPlugin, then played. ``links`` is normally
     one item, but several for an artist (its top tracks). ``mode``:
     ``now`` clears the queue and starts playback; ``add`` appends; ``next``
-    inserts after the current track.
+    inserts after the current track. Speakers that can't join are skipped.
     """
     if not speakers:
         raise SonosError("No speakers to play on.")
     if not links:
         raise SonosError("Nothing to play.")
 
-    coordinator = _form_group(speakers)
-    if volume is not None:
-        for sp in speakers:
-            sp.volume = _clamp_volume(volume)
+    coordinator, skipped = _form_group(speakers)
+    _apply_volume(speakers, skipped, volume)
 
     share = ShareLinkPlugin(coordinator)
     if mode == "now":
@@ -204,12 +221,16 @@ def play_spotify(
     if mode == "now" and first_idx:
         # add_share_link_to_queue returns a 1-based index; play_from_queue is 0-based.
         coordinator.play_from_queue(first_idx - 1)
+    return skipped
 
 
 def stop(speakers: list[SoCo]) -> None:
     for sp in speakers:
         # commands must go to the group coordinator
-        (sp.group.coordinator if sp.group else sp).stop()
+        try:
+            (sp.group.coordinator if sp.group else sp).stop()
+        except SoCoException:
+            pass  # best-effort: don't let one wedged speaker abort the rest
 
 
 def _coordinators(speakers: list[SoCo]) -> list[SoCo]:
@@ -228,7 +249,7 @@ def _coordinators(speakers: list[SoCo]) -> list[SoCo]:
 def skip_next(speakers: list[SoCo]) -> None:
     """Skip to the next track on each speaker's group."""
     for c in _coordinators(speakers):
-        c.next()
+        c.next()  # SoCoException (e.g. no next track) bubbles up for a clear message
 
 
 def skip_previous(speakers: list[SoCo]) -> None:
@@ -237,10 +258,16 @@ def skip_previous(speakers: list[SoCo]) -> None:
         c.previous()
 
 
-def set_volume(speakers: list[SoCo], level: int) -> None:
+def set_volume(speakers: list[SoCo], level: int) -> list[str]:
+    """Set volume on each speaker; return any that couldn't be reached."""
     level = _clamp_volume(level)
+    skipped: list[str] = []
     for sp in speakers:
-        sp.volume = level
+        try:
+            sp.volume = level
+        except SoCoException:
+            skipped.append(sp.player_name)
+    return skipped
 
 
 _TITLE_RE = re.compile(r"<dc:title>(.*?)</dc:title>", re.DOTALL)
@@ -275,3 +302,29 @@ def now_playing(speaker: SoCo) -> dict[str, str]:
 
 def _clamp_volume(level: int) -> int:
     return max(0, min(100, int(level)))
+
+
+def _apply_volume(speakers: list[SoCo], skipped: list[str], volume: int | None) -> None:
+    """Set ``volume`` on each non-skipped speaker before playback.
+
+    If a speaker rejects the volume command (e.g. a wedged player returning UPnP
+    501), DROP it from the group rather than letting it play at an unknown level —
+    a speaker stuck loud is worse than one that's silent. Dropped speakers are
+    appended to ``skipped`` so the caller can report them.
+    """
+    if volume is None:
+        return
+    skip = set(skipped)
+    level = _clamp_volume(volume)
+    for sp in speakers:
+        if sp.player_name in skip:
+            continue
+        try:
+            sp.volume = level
+        except SoCoException:
+            try:
+                sp.unjoin()  # can't control it -> don't let it blast
+            except SoCoException:
+                pass
+            skipped.append(sp.player_name)
+            skip.add(sp.player_name)

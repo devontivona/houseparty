@@ -64,6 +64,12 @@ subgroup).
   imports, keep that fallback and test under 3.10.
 - **Sonos room names often include a suffix** (e.g. "Kitchen Speaker") and are
   case-sensitive. Code and docs should resolve names via discovery, never guess.
+- **Multi-speaker ops must degrade gracefully.** A wedged player returns UPnP 501
+  on join/play/volume. `_form_group` skips members that fail to join, and
+  `_apply_volume` DROPS a speaker whose volume can't be set (a player stuck loud
+  is worse than silent). Both feed a `skipped` list the CLI surfaces via
+  `_warn_skipped`. Never let one bad speaker crash an "everywhere" command, and
+  never wrap a raw `SoCoException` traceback to the user — convert to `SonosError`.
 - **Spotify is queue-based, not a stream.** `sonos.play_spotify()` uses
   `ShareLinkPlugin.add_share_link_to_queue()` (returns a **1-based** index), then
   `play_from_queue(idx - 1)` (**0-based**) — keep that conversion. Sonos doesn't

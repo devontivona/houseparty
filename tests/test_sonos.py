@@ -2,6 +2,9 @@
 
 from unittest.mock import MagicMock
 
+import pytest
+from soco.exceptions import SoCoException
+
 from houseparty import sonos
 
 
@@ -82,12 +85,80 @@ def test_form_group_isolates_targets_and_drops_extras():
     group = MagicMock(); group.members = [coord, m2, extra]
     coord.group = m2.group = extra.group = group
 
-    result = sonos._form_group([coord, m2])
+    coordinator, skipped = sonos._form_group([coord, m2])
 
     extra.unjoin.assert_called_once()       # non-target dropped (stops)
     coord.unjoin.assert_called_once()       # coordinator detached from old group
     m2.join.assert_called_once_with(coord)  # target regrouped onto coordinator
-    assert result is coord
+    assert coordinator is coord
+    assert skipped == []
+
+
+def test_form_group_skips_member_that_fails_to_join():
+    coord = MagicMock(); coord.uid = "C"; coord.group = None
+    bad = MagicMock(); bad.uid = "BAD"; bad.player_name = "Rec Room"; bad.group = None
+    bad.join.side_effect = SoCoException("UPnP Error 501")
+
+    coordinator, skipped = sonos._form_group([coord, bad])
+
+    assert coordinator is coord
+    assert skipped == ["Rec Room"]  # wedged member skipped, not fatal
+
+
+def test_form_group_coordinator_failure_is_fatal():
+    coord = MagicMock(); coord.uid = "C"; coord.player_name = "Kitchen"; coord.group = None
+    coord.unjoin.side_effect = SoCoException("UPnP Error 501")
+
+    with pytest.raises(sonos.SonosError):
+        sonos._form_group([coord])
+
+
+def test_set_volume_skips_unreachable():
+    class Ok:
+        player_name = "Kitchen"
+        volume = 0
+
+    class Bad:
+        player_name = "Rec Room"
+
+        @property
+        def volume(self):
+            return 0
+
+        @volume.setter
+        def volume(self, _):
+            raise SoCoException("UPnP Error 501")
+
+    skipped = sonos.set_volume([Ok(), Bad()], 10)
+
+    assert skipped == ["Rec Room"]
+
+
+def test_apply_volume_drops_speaker_it_cannot_control():
+    # joins fine, but rejects the volume command -> dropped, not left blasting
+    class Bad:
+        player_name = "Rec Room"
+        unjoined = False
+
+        @property
+        def volume(self):
+            return 0
+
+        @volume.setter
+        def volume(self, _):
+            raise SoCoException("UPnP Error 501")
+
+        def unjoin(self):
+            type(self).unjoined = True
+
+    ok = MagicMock(); ok.player_name = "Kitchen"
+    skipped: list[str] = []
+
+    sonos._apply_volume([ok, Bad()], skipped, 10)
+
+    assert ok.volume == 10
+    assert skipped == ["Rec Room"]
+    assert Bad.unjoined is True  # dropped so it can't play at the wrong level
 
 
 def test_form_group_single_target_leaves_its_group_alone():

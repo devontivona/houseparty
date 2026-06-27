@@ -8,6 +8,7 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.table import Table
+from soco.exceptions import SoCoException
 
 from . import nts, sonos, spotify
 from .config import Config
@@ -39,6 +40,14 @@ def _resolve_speaker_names(speaker: Optional[list[str]], cfg: Config) -> list[st
         _fail("No speaker given. Pass --speaker/-s or set defaults via "
               "`houseparty config set-default <name>...`.")
     return names
+
+
+def _warn_skipped(skipped: list[str]) -> None:
+    if skipped:
+        err.print(
+            f"[yellow]warning:[/] couldn't reach {', '.join(skipped)} — skipped. "
+            "(A power-cycle usually fixes a wedged speaker.)"
+        )
 
 
 def _now_label(info: dict, mixtapes) -> str:
@@ -127,13 +136,14 @@ def play(
 
     try:
         speakers = sonos.resolve_speakers(names, cfg.speaker_ips)
-        sonos.play(speakers, title=title, url=url, volume=vol)
+        skipped = sonos.play(speakers, title=title, url=url, volume=vol)
     except sonos.SonosError as exc:
         _fail(str(exc))
 
-    where = ", ".join(names)
+    where = ", ".join(n for n in names if n not in set(skipped))
     vol_note = f" at volume {vol}" if vol is not None else ""
     console.print(f"[green]▶[/] Playing [bold]{title}[/] on [bold]{where}[/]{vol_note}.")
+    _warn_skipped(skipped)
 
 
 @app.command()
@@ -189,10 +199,12 @@ def volume(
     names = _resolve_speaker_names(speaker, cfg)
     try:
         speakers = sonos.resolve_speakers(names, cfg.speaker_ips)
-        sonos.set_volume(speakers, level)
+        skipped = sonos.set_volume(speakers, level)
     except sonos.SonosError as exc:
         _fail(str(exc))
-    console.print(f"[green]♪[/] Set volume {level} on [bold]{', '.join(names)}[/].")
+    done = ", ".join(n for n in names if n not in set(skipped))
+    console.print(f"[green]♪[/] Set volume {level} on [bold]{done}[/].")
+    _warn_skipped(skipped)
 
 
 @app.command()
@@ -221,7 +233,11 @@ def now(speaker: Optional[list[str]] = SpeakerOpt) -> None:
         except (sonos.SonosError, nts.NTSError) as exc:
             _fail(str(exc))
         for sp, name in zip(speakers, speaker):
-            info = sonos.now_playing(sp)
+            try:
+                info = sonos.now_playing(sp)
+            except SoCoException:
+                console.print(f"[bold]{name}[/] [dim](unreachable)[/]")
+                continue
             state = info.get("transport_state", "")
             console.print(f"[bold]{name}[/] [{state}]: {_now_label(info, mixtapes)}")
 
@@ -398,16 +414,20 @@ def spotify_play(
         _fail(str(exc))
     try:
         speakers = sonos.resolve_speakers(names, cfg.speaker_ips)
-        sonos.play_spotify(
+        skipped = sonos.play_spotify(
             speakers, list(target_info.links), label=target_info.label, mode=mode, volume=vol
         )
     except sonos.SonosError as exc:
         _fail(str(exc))
+    played = [n for n in names if n not in set(skipped)]
     if json_out:
-        _emit_json({"played": target_info.as_dict(), "speakers": names, "mode": mode})
+        _emit_json(
+            {"played": target_info.as_dict(), "speakers": played, "skipped": skipped, "mode": mode}
+        )
         return
     verb = {"now": "Playing", "add": "Queued", "next": "Up next"}[mode]
-    console.print(f"[green]▶[/] {verb} [bold]{target_info.label}[/] on [bold]{', '.join(names)}[/].")
+    console.print(f"[green]▶[/] {verb} [bold]{target_info.label}[/] on [bold]{', '.join(played)}[/].")
+    _warn_skipped(skipped)
 
 
 @spotify_app.command("playlists")
