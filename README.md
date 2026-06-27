@@ -77,3 +77,6 @@ Sonos's multicast discovery is blocked (common on segmented/VLAN'd Wi-Fi).
 ```bash
 uv run pytest        # offline unit tests (mocked NTS + Sonos)
 ```
+
+See [AGENTS.md](AGENTS.md) for the architecture, project-specific gotchas, and
+the release/versioning workflow.
