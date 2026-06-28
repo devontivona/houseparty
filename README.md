@@ -33,7 +33,9 @@ houseparty next -s "Kitchen Speaker"         # skip track (Spotify queue playbac
 houseparty volume 25 -s "Kitchen Speaker"
 houseparty now                               # what's on air on NTS right now
 houseparty now -s "Kitchen Speaker"          # ...plus what the speaker is playing
-houseparty stop -s "Kitchen Speaker"
+houseparty pause -s "Kitchen Speaker"        # pause (keeps the group, resumable)
+houseparty resume -s "Kitchen Speaker"
+houseparty stop -s "Kitchen Speaker"         # stop + ungroup (reliably silences)
 ```
 
 `TARGET` is `1` or `2` for the live stations, or a mixtape alias/name

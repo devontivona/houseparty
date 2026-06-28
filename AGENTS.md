@@ -64,6 +64,12 @@ subgroup).
   imports, keep that fallback and test under 3.10.
 - **Sonos room names often include a suffix** (e.g. "Kitchen Speaker") and are
   case-sensitive. Code and docs should resolve names via discovery, never guess.
+- **Stopping a group means unjoin, not coordinator-stop.** On Sonos, stopping a
+  group coordinator does NOT reliably stop its slaved members, and a slave can't
+  be stopped directly (`SoCoSlaveException`). `sonos.stop()` therefore stops the
+  coordinators AND unjoins every target — that's the only reliable way to
+  guarantee silence. So `stop` ends the session and ungroups; `pause` is the
+  non-destructive variant. Don't "optimize" stop back to coordinator-only.
 - **Multi-speaker ops must degrade gracefully.** A wedged player returns UPnP 501
   on join/play/volume. `_form_group` skips members that fail to join, and
   `_apply_volume` DROPS a speaker whose volume can't be set (a player stuck loud

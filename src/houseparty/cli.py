@@ -159,6 +159,32 @@ def stop(speaker: Optional[list[str]] = SpeakerOpt) -> None:
     console.print(f"[yellow]■[/] Stopped [bold]{', '.join(names)}[/].")
 
 
+@app.command()
+def pause(speaker: Optional[list[str]] = SpeakerOpt) -> None:
+    """Pause playback (resumable) on one or more speakers."""
+    cfg = Config.load()
+    names = _resolve_speaker_names(speaker, cfg)
+    try:
+        speakers = sonos.resolve_speakers(names, cfg.speaker_ips)
+        sonos.pause(speakers)
+    except sonos.SonosError as exc:
+        _fail(str(exc))
+    console.print(f"[yellow]⏸[/] Paused [bold]{', '.join(names)}[/].")
+
+
+@app.command()
+def resume(speaker: Optional[list[str]] = SpeakerOpt) -> None:
+    """Resume paused playback on one or more speakers."""
+    cfg = Config.load()
+    names = _resolve_speaker_names(speaker, cfg)
+    try:
+        speakers = sonos.resolve_speakers(names, cfg.speaker_ips)
+        sonos.resume(speakers)
+    except sonos.SonosError as exc:
+        _fail(str(exc))
+    console.print(f"[green]▶[/] Resumed [bold]{', '.join(names)}[/].")
+
+
 @app.command("next")
 def next_track(speaker: Optional[list[str]] = SpeakerOpt) -> None:
     """Skip to the next track (for queue playback, e.g. Spotify)."""

@@ -4,7 +4,7 @@ description: Streams NTS Radio (live stations + always-on infinite mixtapes) and
 license: MIT
 metadata:
   homepage: https://github.com/devontivona/houseparty
-  version: "0.3.3"
+  version: "0.4.0"
 compatibility: Requires Python 3.10+, the uv tool, and a Sonos system reachable on the local network.
 allowed-tools: Bash(houseparty:*) Bash(uv:*)
 ---
@@ -96,8 +96,14 @@ Check it is available with `houseparty --help`.
   speakers and play in sync. The listed speakers become the **exact** group — any
   other speakers they were grouped with are dropped (stopped), so `-s` controls
   precisely where playback happens.
-- `houseparty stop -s NAME` — stop playback (stopping any speaker in a group
-  stops the whole group).
+- `houseparty stop -s NAME` — stop playback and **ungroup** the listed speakers.
+  This reliably silences everything (on Sonos, stopping a group coordinator
+  doesn't reliably stop its members, so stop unjoins them). It ends the session;
+  `play` re-forms a group next time.
+- `houseparty pause -s NAME` / `houseparty resume -s NAME` — pause/resume without
+  ungrouping (the "I'll be right back" option). For Spotify, resume continues
+  from the same spot; for live radio, pause acts like stop and resume restarts
+  the stream.
 - `houseparty next -s NAME` / `houseparty previous -s NAME` — skip to the next /
   previous track. Works for queue playback (Spotify); live radio has no queue.
 - `houseparty volume N -s NAME` — set volume (0-100) on the given speakers.

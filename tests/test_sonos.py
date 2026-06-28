@@ -175,6 +175,33 @@ def test_form_group_single_target_leaves_its_group_alone():
     move.unjoin.assert_called_once()
 
 
+def test_stop_stops_coordinator_and_unjoins_all_targets():
+    # coordinator-stop doesn't reliably stop slaves, so stop() also unjoins
+    coord = MagicMock(); coord.uid = "C"; coord.player_name = "Kitchen"
+    member = MagicMock(); member.uid = "M"; member.player_name = "Office"
+    coord.group.coordinator = coord
+    member.group.coordinator = coord
+
+    sonos.stop([coord, member])
+
+    coord.stop.assert_called_once()      # one stop on the shared coordinator
+    coord.unjoin.assert_called_once()    # every target unjoined...
+    member.unjoin.assert_called_once()   # ...so the slaved member goes quiet
+
+
+def test_pause_and_resume_target_coordinators():
+    coord = MagicMock(); coord.uid = "C"
+    member = MagicMock(); member.uid = "M"
+    coord.group.coordinator = coord
+    member.group.coordinator = coord
+
+    sonos.pause([coord, member])
+    coord.pause.assert_called_once()     # de-duped to the shared coordinator
+
+    sonos.resume([coord, member])
+    coord.play.assert_called_once()
+
+
 def test_skip_next_issues_one_next_per_group():
     coord = MagicMock()
     coord.uid = "A"

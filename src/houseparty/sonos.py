@@ -224,13 +224,48 @@ def play_spotify(
     return skipped
 
 
+def _safe(fn) -> None:
+    """Call ``fn`` ignoring Sonos errors (best-effort transport control)."""
+    try:
+        fn()
+    except SoCoException:
+        pass
+
+
 def stop(speakers: list[SoCo]) -> None:
+    """Stop playback on the targets and ungroup them.
+
+    Why ungroup: on Sonos, stopping a group coordinator does NOT reliably stop
+    its slaved members, and a slave can't be stopped directly
+    (``SoCoSlaveException``). The one reliable primitive is **unjoin** — a player
+    removed from its group stops. So we stop each coordinator (to halt the
+    streams) and unjoin every target (to guarantee members go quiet). This ends
+    the listening session and leaves speakers standalone; ``play`` re-forms groups
+    from scratch, and ``pause`` is the non-destructive "I'll be right back" option.
+    """
+    coords: dict[str, SoCo] = {}
     for sp in speakers:
-        # commands must go to the group coordinator
         try:
-            (sp.group.coordinator if sp.group else sp).stop()
+            c = sp.group.coordinator if sp.group else sp
         except SoCoException:
-            pass  # best-effort: don't let one wedged speaker abort the rest
+            c = sp
+        coords[c.uid] = c
+    for c in coords.values():
+        _safe(c.stop)
+    for sp in speakers:
+        _safe(sp.unjoin)  # guarantees slaved members stop too
+
+
+def pause(speakers: list[SoCo]) -> None:
+    """Pause playback (resumable) on each target's group coordinator."""
+    for c in _coordinators(speakers):
+        _safe(c.pause)
+
+
+def resume(speakers: list[SoCo]) -> None:
+    """Resume playback on each target's group coordinator."""
+    for c in _coordinators(speakers):
+        _safe(c.play)
 
 
 def _coordinators(speakers: list[SoCo]) -> list[SoCo]:
